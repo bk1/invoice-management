@@ -1,0 +1,257 @@
+#!/usr/bin/ruby
+# encoding: ISO-8859-1
+
+require "rubygems"
+require "long-decimal"
+require "erb"
+
+# Customer < Hash (check())
+# Mandate < Hash (check())
+
+rdir = ENV['HOME'] + "/invoices" # needs to be changed....
+Dir.chdir rdir
+
+DEFAULT_VAT_RATE = LongDecimal("0.080").round_to_scale(8)
+ZERO_VAT_RATE    = LongDecimal("0.000").round_to_scale(8)
+DEFAULT_CURRENCY = 'CHF'
+CURRENCIES       = [ 'CHF', 'EUR' ]
+
+class Customer
+
+  attr_reader :short_name, :country, :long_name, :id, :address
+
+  def initialize(short_name, country, long_name, id, address)
+    @short_name = short_name
+    @country    = country
+    @long_name  = long_name
+    @id         = id
+    @address    = address
+  end
+
+  def to_s
+    s = "customer[s="+short_name+" c="+country+" l=\""+long_name+"\" id="+id.to_s+" a=\""+address.gsub(/\n/, "|")+"\"]"
+    s
+  end
+end
+
+
+def read_customers
+
+  all_customers = {};
+  dname = "./customers"
+  d = Dir.new(dname)
+  d.each do |c|
+    next if File.directory?(c)
+    next unless c.match(/\.txt$/)
+    app_term=""
+    app_key =""
+    ch = {}
+    File.open("./customers/" + c, "r") do |f|
+      f.each_line do |l|
+        l.chomp!
+        if app_key != "" then
+          if l == app_term
+            app_term = ""
+            app_key  = ""
+          else
+            ch[app_key] += l+ "\n"
+          end
+        else
+          if l.match(/(.+)=<<(.+)/) then
+            app_key = $1
+            app_term = $2
+            ch[app_key] = ""
+          elsif l.match(/(.+)=(.+)/) then
+            ch[$1] = $2
+          end
+        end
+      end
+    end
+    short_name = ch['short_name'].upcase
+    country    = ch['country'].upcase
+    long_name  = ch['long_name'].gsub(/&/, '\\\\&')
+    id         = ch['id']
+    puts "address=" + ch['address'];
+    address    = ch['address'].gsub(/&/, '\\\\&')
+    customer   = Customer.new(short_name, country, long_name, id, address)
+    puts "address=" + address;
+
+    all_customers[short_name] = customer;
+    all_customers[id]         = customer;
+    printf "id=%s sn=%s ln=%s\n", id, short_name, long_name
+  end
+  all_customers
+end
+
+def usage
+  puts "rechnung customer mandate1 from1:to1 rate1 unit1 quantity1 [vat|novat] .. mandaten fromn:ton raten unitn quantityn [vat|novat]"
+  exit 0
+end
+
+all_customers = read_customers
+
+
+all_customers.each_key do |k|
+  # puts k.to_s + ":" + all_customers[k].to_s
+end
+
+zahlungs_ziel = nil
+zahlungs_ziel_text = ""
+image        = nil
+template     = "template.tex"
+template_img = "template-img.tex"
+if ARGV[0].match(/.*\.(png|gif|jpg)$/)
+  image   = ARGV.shift
+  template = template_img
+  puts "using image=#{image} template=#{template}"
+end
+
+if ARGV[0].match(/^--ziel=(\d+)\s*$/)
+  zahlungs_ziel = $1
+  zahlungs_ziel_text = "Zahlbar innert #{zahlungs_ziel} Tagen."
+  ARGV.shift
+end
+if (ARGV.length < 7 || ARGV.length % 6 != 1 && ARGV.length % 6 != 2) then
+  puts "wrong number of arguments"
+  usage
+end
+
+mandate      = []
+begin_date   = []
+end_date     = []
+rate         = []
+quantity     = []
+unit         = []
+vat_rate     = []
+vat_rate_100 = []
+latex_cmd    = "pdflatex"
+currency     = DEFAULT_CURRENCY
+
+CURRENCIES.each do |cur|
+  if ARGV[0].upcase == cur
+    currency = cur
+    ARGV.shift
+  end
+end
+
+if (ARGV.length < 7 || ARGV.length % 6 != 1) then
+  puts "wrong number of arguments"
+  usage
+end
+
+customer_key = ARGV.shift.upcase
+customer     = all_customers[customer_key]
+
+if (customer.nil?) then
+  puts "unknown customer #{customer_key}"
+  usage
+end
+
+n = ARGV.length / 6
+n.times do |i|
+  ii = i * 6
+  mandate[i] = ARGV[ii]
+  if mandate[i].length > 10
+    mtxt = (mandate[i].gsub /\/+|\\+/, ('\\' * 8))
+    puts "mtxt=" + mtxt
+    mandate[i] = '\parbox[t]{60pt}{\small\raggedright ' + mtxt + '\medskip}'
+    puts "mtxt=" + mandate[i]
+  end
+  range = ARGV[ii+1]
+  if range.match(/(\d\d\d\d-\d\d-\d\d):(\d\d\d\d-\d\d-\d\d)/) then
+    begin_date[i] = $1
+    end_date[i]   = $2
+  else
+    puts "range no date"
+    usage
+  end
+  rate[i]     = LongDecimal(ARGV[ii+2]).round_to_allowed_remainders(2, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 10, LongDecimal::ROUND_HALF_UP)
+  unit[i]     = ARGV[ii+3]
+  quantity[i] = LongDecimal(ARGV[ii+4]).round_to_allowed_remainders(2, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 10, LongDecimal::ROUND_HALF_UP)
+  vat_novat   = ARGV[ii+5].upcase
+  if vat_novat == 'VAT'
+    vat_rate[i] = DEFAULT_VAT_RATE
+  elsif vat_novat == 'NOVAT'
+    vat_rate[i] = ZERO_VAT_RATE
+  else
+    puts "vat/novat missing"
+    usage
+  end
+  vat_rate_100[i] = (vat_rate[i] * 100).round_to_scale(1, LongDecimal::ROUND_HALF_UP)
+  puts "i=#{i} rate=#{rate[i]} q=#{quantity[i]}"
+end
+
+customer_id    = customer.id
+sub_count = "001"
+t = Time.now
+# t = Time.utc(2010,12,31)
+short_date = sprintf("%04d%02d%02d", t.year, t.month, t.day)
+long_date  = sprintf("%04d-%02d-%02d", t.year, t.month, t.day)
+file_name_base = customer.short_name.downcase + "-" + customer.country.downcase + "-" + customer_id + "-" + short_date + "-" + sub_count
+
+system "yes . |rcs -l #{file_name_base}.tex #{file_name_base}.pdf"
+system "chmod +w #{file_name_base}.tex #{file_name_base}.pdf"
+
+customer_address0 = customer.address.force_encoding("ISO-8859-1")
+customer_address  = customer_address0.gsub(/\\\\+/, '\\[latex-nl]\\')
+puts customer_address
+p    customer_address
+net_total = LongDecimal.zero!(2)
+vat_total = LongDecimal.zero!(2)
+gross_total = LongDecimal.zero!(2)
+net_price = []
+vat       = []
+gross_price = []
+mandate.length.times do |i|
+  net_price[i] = (rate[i]*quantity[i]).round_to_allowed_remainders(2, [0, 5], 10, LongDecimal::ROUND_HALF_UP)
+  net_total += net_price[i]
+  vat[i]       = (net_price[i] * vat_rate[i]).round_to_allowed_remainders(2, [0, 5], 10, LongDecimal::ROUND_HALF_UP)
+  vat_total += vat[i]
+  gross_price[i] = (net_price[i] + vat[i]).round_to_allowed_remainders(2, [0, 5], 10, LongDecimal::ROUND_HALF_UP)
+  gross_total += gross_price[i]
+end
+
+template_str = nil
+File.open(template, "r") do |inf|
+  template_str = inf.read
+end
+
+template = ERB.new(template_str)
+result = template.result
+puts result
+result.force_encoding("ISO-8859-1")
+result.gsub!("[latex-nl]", "")
+
+File.open(file_name_base + ".tex", "w") do |out|
+  out.write(result)
+end
+
+puts "latex:"
+system "pdflatex #{file_name_base}.tex"
+system "pdf2ps #{file_name_base}.pdf #{file_name_base}.ps"
+# system "latex #{file_name_base}.tex"
+# system "dvips -f < #{file_name_base}.dvi > #{file_name_base}.ps"
+# system "ps2pdf #{file_name_base}.ps #{file_name_base}.pdf"
+# system "yes . |ci #{file_name_base}.tex #{file_name_base}.dvi #{file_name_base}.pdf"
+# system "co #{file_name_base}.tex #{file_name_base}.dvi #{file_name_base}.pdf"
+system "yes . |ci #{file_name_base}.tex #{file_name_base}.pdf"
+system "co #{file_name_base}.tex #{file_name_base}.pdf"
+
+# ${customer_address} <-id
+# ${customer_id}      <-id
+
+# ${mandate[i]}
+# ${begin[i]}
+# ${end[i]}
+# ${rate[i]}
+# ${quantity[i]}
+
+# ${short_date} <- calc
+# ${sub_count}  <- calc
+
+# ${gross_price[i]} <- calc
+# ${vat[i]}     <- calc
+# ${net_price[i]} <- calc
+# ${net_total}  <- calc
+# ${vat_total}  <- calc
+# ${gross_total} <- calc
