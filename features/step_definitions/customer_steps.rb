@@ -3,11 +3,9 @@ Given(/^I am in the hompage$/) do
 end
 
 Given(/^I create a new customer$/) do
-   pending # express the regexp above with the code you wish you had
-   #Customer.create
-
+   Customer.create
  end
-#
-# Then(/^I should have a new customer$/) do
-#   pending # express the regexp above with the code you wish you had
-# end
+
+ Then(/^I should have a new customer$/) do
+  expect(Customer.count).to eq(1)
+ end
