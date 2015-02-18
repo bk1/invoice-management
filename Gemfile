@@ -48,3 +48,5 @@ group :test do
   gem 'database_cleaner'
 end
 
+# Gem to fix tzinfo problem on Windows
+gem 'tzinfo-data'
