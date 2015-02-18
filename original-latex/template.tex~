@@ -1,0 +1,91 @@
+% LaTeX
+% $Header: /home/bk1/it-sky-consulting/rechnungen/RCS/template.tex,v 1.5 2012/01/04 21:02:19 bk1 Exp bk1 $
+% $Name:  $
+\documentclass[10pt,a4paper,addresshigh]{dinbrief}
+\usepackage{german}
+%\usepackage{isodate}
+\usepackage[T1]{fontenc}
+\usepackage[latin1]{inputenc}
+\usepackage{graphics}
+\usepackage{graphicx}
+
+\makeatletter
+\makeatother
+
+\setlength{\topmargin}{0mm}
+%\setlength{\leftmargin}{10mm}
+\setlength{\oddsidemargin}{-11mm}
+\setlength{\evensidemargin}{-11mm}
+
+%\newfont{\ocrb}{ocrb10}
+
+\begin{document}
+\sffamily
+%\pagenumbering{empty}
+\pagestyle{empty}
+\hsize=185mm
+%\vspace{1mm}
+
+\vspace{-40mm}
+
+{\setlength{\parindent}{-2mm}
+\begin{tabular}{l}
+IT Sky Consulting GmbH\\
+Kirchgasse 17\\
+8203 Schaffhausen\\
+Schweiz\\
++41792704802\\
+bk1@gmx.net
+\end{tabular}
+}
+
+\vspace{2mm}
+
+\includegraphics[width=30mm]{itsky.png}
+
+\vspace{10mm}
+
+{\setlength{\parindent}{-2mm}
+\begin{tabular}{l}
+  <%= customer_address %>
+\end{tabular}
+}
+
+\vspace{10mm}
+
+\rightline{Schaffhausen, <%= long_date %>}
+
+\vspace{12mm}
+
+\leftline{\bfseries Rechnung: <%= customer_id %>-<%= short_date %>-<%= sub_count %>}
+\vspace{2mm}
+\leftline{MwtSt-Nr: CHE-113.555.561 MWST}
+\leftline{\small Alte MwtSt-Nr: 667010}
+\leftline{IBAN: CH57 0078 2007 6667 1510 1}
+\leftline{BIC: SHKBCH2S}
+\leftline{Rechnungsdatum: <%= long_date %>}
+\leftline{Rechnungsbetrag: \bfseries <%= gross_total %> <%= currency %>}
+
+\vspace{12mm}
+
+\leftline{\bfseries Alle Beträge in <%= currency %>}
+
+\vspace{10mm}
+
+\begin{tabular}{lllrlrrrrr}
+{\bfseries Projekt}&{\bfseries Beginn}&{\bfseries Ende}&{\bfseries Anzahl}&{\bfseries Einheit}&{\bfseries Satz}&{\bfseries\small\raggedright exkl. MwSt}&{\bfseries MwSt \%}&{\bfseries MwSt}&{\bfseries\small\raggedright inkl. MwSt}\\
+\hline<% mandate.length.times do |i| %>
+<%= mandate[i] %>&<%= begin_date[i] %>&<%= end_date[i] %>&<%= quantity[i] %>&<%= unit[i] %>&<%= rate[i] %>&<%= net_price[i] %>&<%= vat_rate_100[i] %>\%&<%= vat[i] %>&<%= gross_price[i] %>\\
+\hline<% end %>
+{\bfseries Summe}& & & & & &{\bfseries <%= net_total %>}& &{\bfseries <%= vat_total %>}&{\bfseries <%= gross_total %>}\\
+\end{tabular}
+
+\vspace{6mm}
+<%= zahlungs_ziel_text %>
+\vspace{1mm}
+
+\vfill
+\begin{tabular}{l}
+\small IT Sky Consulting GmbH, Kirchgasse 17, 8203 Schaffhausen, Schweiz, CHE-113.555.561 MWST
+\end{tabular}
+\end{document}
