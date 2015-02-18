@@ -14,9 +14,9 @@
 ActiveRecord::Schema.define(version: 20150218193112) do
 
   create_table "customers", force: :cascade do |t|
-    t.string   "code"
-    t.string   "short_name"
-    t.string   "long_name"
+    t.string   "code", uniq: true
+    t.string   "short_name", uniq: true
+    t.string   "long_name", uniq: true
     t.string   "country"
     t.string   "region"
     t.string   "city"
